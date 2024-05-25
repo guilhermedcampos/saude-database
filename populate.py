@@ -204,7 +204,7 @@ with open("populate.sql", "w") as file:
 	for i, observation in enumerate(observations):
 		appointment_sns_code, symptom, value = observation
 		sql = f"	({appointment_sns_code}, '{symptom}', {value})"
-		sql += "," if i < 87719 else ";"
+		sql += "," if i < len(observations) - 1 else ";"
 		sql += "\n"
 		file.write(sql)
 	file.write("\n")
