@@ -196,7 +196,8 @@ with open("populate.sql", "w", encoding="utf-8") as file:
 	file.write("INSERT INTO receita (codigo_sns, medicamento, quantidade) VALUES\n")
 	for i, perscription in enumerate(perscriptions):
 		appointment_sns_code, medication, quantity = perscription
-		sql = f"	({appointment_sns_code}, '{medication}', {quantity})"
+		sns_code_str = str(appointment_sns_code).zfill(12)
+		sql = f"	('{sns_code_str}', '{medication}', {quantity})"
 		sql += "," if i < len(perscriptions) - 1 else ";"
 		sql += "\n"
 		file.write(sql)
@@ -204,10 +205,10 @@ with open("populate.sql", "w", encoding="utf-8") as file:
 	print("Perscriptions inserted.")
 
 	# Write Observations for 87720 Appointments
-	file.write("INSERT INTO observacao (codigo_sns, sintoma, valor) VALUES\n")
+	file.write("INSERT INTO observacao (id, parametro, valor) VALUES\n")
 	for i, observation in enumerate(observations):
 		appointment_sns_code, symptom, value = observation
-		sql = f"	({appointment_sns_code}, '{symptom}', {value})"
+		sql = f"	({appointment_sns_code}, '{symptom}', {value})" if value is not None else f"	({appointment_sns_code}, '{symptom}', NULL)"
 		sql += "," if i < len(observations) - 1 else ";"
 		sql += "\n"
 		file.write(sql)
