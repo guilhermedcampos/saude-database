@@ -181,7 +181,8 @@ with open("populate.sql", "w", encoding="utf-8") as file:
 	file.write("INSERT INTO consulta (ssn, nif, nome, data, hora, codigo_sns) VALUES\n")
 	for i, appointment in enumerate(appointments):
 		ssn, nif, clinic, day, hour, sns_code = appointment
-		sql = f"	('{ssn}', '{nif}', '{clinic}', '{day}', '{hour}', '{sns_code}')"
+		sns_code_str = str(sns_code).zfill(12)
+		sql = f"	('{ssn}', '{nif}', '{clinic}', '{day}', '{hour}', '{sns_code_str}')"
 		sql += "," if i < 87719 else ";"
 		sql += "\n"
 		file.write(sql)
