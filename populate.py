@@ -61,7 +61,7 @@ patients = []
 for i in range(1, 5001):
 	ssn = str(i + 11932603870).zfill(11)
 	nif = str(i + 273279432).zfill(9)
-	name = f'Little Jhon {i}'
+	name = f'Little John {i}'
 	phone = str(i + 918115714).zfill(9)
 	address = f'Rua Sao Vicente {i}, 2750-123 Cascais'
 	dob = random_date(date(1980, 1, 1), date(2020, 12, 31)).strftime('%Y-%m-%d')
@@ -121,7 +121,7 @@ for i, appointment in enumerate(appointments):
 print("Observations generated.")
 
 # Open a file to write SQL commands
-with open("populate.sql", "w") as file:
+with open("populate.sql", "w", encoding="utf-8") as file:
 	# Write 5 Clinics
 	file.write("INSERT INTO clinica (nome, telefone, morada) VALUES\n")
 	for i, clinic in enumerate(clinics):
