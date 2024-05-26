@@ -134,7 +134,7 @@ with open("populate.sql", "w", encoding="utf-8") as file:
 	print("Clinics inserted.")
 
 	# Write 25 Nurses
-	file.write("INSERT INTO enfermeiro (nif, nome, telefone, morada, clinica) VALUES\n")
+	file.write("INSERT INTO enfermeiro (nif, nome, telefone, morada, nome_clinica) VALUES\n")
 	for i, nurse in enumerate(nurses):
 		nif, name, phone, address, clinic = nurse
 		sql = f"	('{nif}', '{name}', '{phone}', '{address}', '{clinic}')"
@@ -160,7 +160,7 @@ with open("populate.sql", "w", encoding="utf-8") as file:
 	for i, works in enumerate(work_orders):
 		medic, clinic, day = works
 		sql = f"	('{medic}', '{clinic}', {day})"
-		sql += "," if i < 59 else ";"
+		sql += "," if i < 419 else ";"
 		sql += "\n"
 		file.write(sql)
 	file.write("\n")
@@ -181,7 +181,7 @@ with open("populate.sql", "w", encoding="utf-8") as file:
 	file.write("INSERT INTO consulta (ssn, nif, nome, data, hora, codigo_sns) VALUES\n")
 	for i, appointment in enumerate(appointments):
 		ssn, nif, clinic, day, hour, sns_code = appointment
-		sql = f"	('{ssn}', '{nif}', '{clinic}', '{day}', '{hour}', {sns_code})"
+		sql = f"	('{ssn}', '{nif}', '{clinic}', '{day}', '{hour}', '{sns_code}')"
 		sql += "," if i < 87719 else ";"
 		sql += "\n"
 		file.write(sql)
