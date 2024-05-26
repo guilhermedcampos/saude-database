@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import psycopg2
+import datetime
 
 app = Flask(__name__)
 
@@ -43,19 +44,62 @@ def list_specialties(clinic):
 def list_doctors(clinic, specialty):
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Get the list of doctors
     cursor.execute('''
-        SELECT m.nome, t.dia_da_semana, MIN(c.data) AS proxima_data, MIN(c.hora) AS proxima_hora
+        SELECT m.nome
         FROM medico m
         JOIN trabalha t ON m.nif = t.nif
-        LEFT JOIN consulta c ON m.nif = c.nif AND t.nome = c.nome AND t.dia_da_semana = EXTRACT(ISODOW FROM c.data)
         WHERE t.nome = %s AND m.especialidade = %s
-        GROUP BY m.nome, t.dia_da_semana
-        ORDER BY m.nome, t.dia_da_semana;
     ''', (clinic, specialty))
-    doctors = cursor.fetchall()
+    doctors = [row[0] for row in cursor.fetchall()]
+
+    # Initialize the result
+    result = {doctor: [] for doctor in doctors}
+
+    # Start from today
+    date = datetime.date.today()
+
+    # Loop until we have 3 slots for each doctor
+    while any(len(slots) < 3 for slots in result.values()):
+        cursor.execute('''
+            WITH possible_times (time) AS (
+                VALUES ('08:00'::time), ('08:30'::time), ('09:00'::time), ('09:30'::time), 
+                       ('10:00'::time), ('10:30'::time), ('11:00'::time), ('11:30'::time), 
+                       ('12:00'::time), ('12:30'::time), ('14:00'::time), ('14:30'::time), 
+                       ('15:00'::time), ('15:30'::time), ('16:00'::time), ('16:30'::time), 
+                       ('17:00'::time), ('17:30'::time), ('18:00'::time), ('18:30'::time)
+            ), doctor_times AS (
+                SELECT m.nome, p.time
+                FROM medico m
+                JOIN trabalha t ON m.nif = t.nif
+                CROSS JOIN possible_times p
+                WHERE t.nome = %s AND m.especialidade = %s AND t.dia_da_semana = EXTRACT(ISODOW FROM %s::date)
+            ), numbered_available_times AS (
+                SELECT dt.nome, dt.time,
+                    ROW_NUMBER() OVER(PARTITION BY dt.nome ORDER BY dt.time) AS rn
+                FROM doctor_times dt
+                LEFT JOIN consulta c ON dt.nome = c.nome AND dt.time = c.hora AND c.data = %s
+                WHERE c.nome IS NULL
+            )
+            SELECT nome, time
+            FROM numbered_available_times
+            WHERE rn <= 3
+            ORDER BY nome, time;
+        ''', (clinic, specialty, date, date))
+
+        # Add the available slots to the result
+        for nome, time in cursor.fetchall():
+            if len(result[nome]) < 3:
+                result[nome].append((date, time))
+
+        # Go to the next day
+        date += datetime.timedelta(days=1)
+
     cursor.close()
     conn.close()
-    return jsonify(doctors)
+
+    return jsonify(result)
 
 @app.route('/a/<clinic>/registar/', methods=['POST'])
 def register_consultation(clinic):
