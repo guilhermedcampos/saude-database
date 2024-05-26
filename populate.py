@@ -84,12 +84,15 @@ delta = timedelta(days=1)
 current_date = start_date
 while current_date <= end_date:
 	for medic in range(60):
-		for appointment in range(2):
-			clinic = get_clinic(medics[medic][0], current_date)
-			hour = random.choice([f"{h}:00" for h in range(8, 19) if h != 13] + [f"{h}:30" for h in range(8, 19) if h != 13])
-			appointment = (patients[(sns_code - 1) % 5000][0], medics[medic][0], clinic, current_date.strftime('%Y-%m-%d'), hour, sns_code)
-			appointments.append(appointment)
-			sns_code += 1
+		clinic = get_clinic(medics[medic][0], current_date)
+		hour = random.sample([f"{h}:00" for h in range(8, 19) if h != 13] + [f"{h}:30" for h in range(8, 19) if h != 13], 2)
+		appointment1 = (patients[(sns_code - 1) % 5000][0], medics[medic][0], clinic, current_date.strftime('%Y-%m-%d'), hour[0], sns_code)
+		sns_code += 1
+		appointment2 = (patients[(sns_code - 1) % 5000][0], medics[medic][0], clinic, current_date.strftime('%Y-%m-%d'), hour[1], sns_code)
+		sns_code += 1
+		appointments.append(appointment1)
+		appointments.append(appointment2)
+		
 	current_date += delta
 print("Appointments generated.")
 
