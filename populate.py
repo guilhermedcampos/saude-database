@@ -86,7 +86,7 @@ while current_date <= end_date:
 	for medic in range(60):
 		for appointment in range(2):
 			clinic = get_clinic(medics[medic][0], current_date)
-			hour = random.choice([f"{h}:00" for h in range(8, 20)] + [f"{h}:30" for h in range(8, 19) if h != 13])
+			hour = random.choice([f"{h}:00" for h in range(8, 19) if h != 13] + [f"{h}:30" for h in range(8, 19) if h != 13])
 			appointment = (patients[(sns_code - 1) % 5000][0], medics[medic][0], clinic, current_date.strftime('%Y-%m-%d'), hour, sns_code)
 			appointments.append(appointment)
 			sns_code += 1
