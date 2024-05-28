@@ -1,151 +1,282 @@
-from flask import Flask, request, jsonify
-import psycopg2
+#!/usr/bin/python3
+# Copyright (c) BDist Development Team
+# Distributed under the terms of the Modified BSD License.
+import os
+from logging.config import dictConfig
+
+from flask import Flask, jsonify, request
+from psycopg.rows import namedtuple_row
+from psycopg_pool import ConnectionPool
 import datetime
 
+# Use the DATABASE_URL environment variable if it exists, otherwise use the default.
+# Use the format postgres://username:password@hostname/database_name to connect to the database.
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgres://saude:saude@postgres/saude")
+
+pool = ConnectionPool(
+	conninfo=DATABASE_URL,
+	kwargs={
+		"autocommit": True,  # If True don’t start transactions automatically.
+		"row_factory": namedtuple_row,
+	},
+	min_size=4,
+	max_size=10,
+	open=True,
+	# check=ConnectionPool.check_connection,
+	name="postgres_pool",
+	timeout=5,
+)
+
+dictConfig(
+	{
+		"version": 1,
+		"formatters": {
+			"default": {
+				"format": "[%(asctime)s] %(levelname)s in %(module)s:%(lineno)s - %(funcName)20s(): %(message)s",
+			}
+		},
+		"handlers": {
+			"wsgi": {
+				"class": "logging.StreamHandler",
+				"stream": "ext://flask.logging.wsgi_errors_stream",
+				"formatter": "default",
+			}
+		},
+		"root": {"level": "INFO", "handlers": ["wsgi"]},
+	}
+)
+
 app = Flask(__name__)
+app.config.from_prefixed_env()
+log = app.logger
 
-# Database connection
-def get_db_connection():
-    conn = psycopg2.connect(
-        dbname='saude',  # Update to your database name
-        user='saude',    # Update to your database user
-        password='saude',  # Update to your database password
-        host = 'localhost',  # Update to your database host
-        port='5432'      # Update to your database port
-    )
-    return conn
+def is_decimal(value):
+	try:
+		float(value)
+		return True
+	except ValueError:
+		return False
+	
+def is_date(value):
+	try:
+		datetime.datetime.strptime(value, '%Y-%m-%d')
+		return True
+	except ValueError:
+		return False
+	
+def is_time(value):
+	try:
+		datetime.datetime.strptime(value, '%H:%M')
+		return True
+	except ValueError:
+		return False
 
-@app.route('/')
-def list_clinics():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT nome, morada FROM clinica;')
-    clinics = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return jsonify(clinics)
+@app.route("/", methods=("GET",))
+def get_clinics():
+	"""Show all the accounts, most recent first."""
+	clinics = []
 
-@app.route('/c/<clinic>/')
-def list_specialties(clinic):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT DISTINCT m.especialidade
-        FROM medico m
-        JOIN trabalha t ON m.nif = t.nif
-        WHERE t.nome = %s;
-    ''', (clinic,))
-    specialties = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return jsonify(specialties)
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					clinics = cur.execute("""SELECT nome, morada FROM clinica;""").fetchall()
+					log.debug(f"Found {cur.rowcount} rows.")
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			else:
+				log.debug("Showing all clinics.")
+				return jsonify(clinics)
 
-@app.route('/c/<clinic>/<specialty>/')
-def list_doctors(clinic, specialty):
-    conn = get_db_connection()
-    cursor = conn.cursor()
 
-    # Get the list of doctors
-    cursor.execute('''
-        SELECT m.nome
-        FROM medico m
-        JOIN trabalha t ON m.nif = t.nif
-        WHERE t.nome = %s AND m.especialidade = %s
-    ''', (clinic, specialty))
-    doctors = [row[0] for row in cursor.fetchall()]
+@app.route("/c/<clinic>/", methods=("GET",))
+def get_specializations(clinic):
 
-    # Initialize the result
-    result = {doctor: [] for doctor in doctors}
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT DISTINCT m.especialidade
+						FROM medico m
+						JOIN trabalha t ON m.nif = t.nif
+						WHERE t.nome = %s;
+					""", (clinic,))
+					specializations = cur.fetchall()
+					log.debug(f"Found {cur.rowcount} rows.")
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			else:
+				log.debug(f"Showing all specializations for clinic {clinic}.")
+				return jsonify(specializations)
 
-    # Start from today
-    date = datetime.date.today()
 
-    # Loop until we have 3 slots for each doctor
-    while any(len(slots) < 3 for slots in result.values()):
-        cursor.execute('''
-            WITH possible_times (time) AS (
-                VALUES ('08:00'::time), ('08:30'::time), ('09:00'::time), ('09:30'::time), 
-                       ('10:00'::time), ('10:30'::time), ('11:00'::time), ('11:30'::time), 
-                       ('12:00'::time), ('12:30'::time), ('14:00'::time), ('14:30'::time), 
-                       ('15:00'::time), ('15:30'::time), ('16:00'::time), ('16:30'::time), 
-                       ('17:00'::time), ('17:30'::time), ('18:00'::time), ('18:30'::time)
-            ), doctor_times AS (
-                SELECT m.nome, p.time
-                FROM medico m
-                JOIN trabalha t ON m.nif = t.nif
-                CROSS JOIN possible_times p
-                WHERE t.nome = %s AND m.especialidade = %s AND t.dia_da_semana = EXTRACT(ISODOW FROM %s::date)
-            ), numbered_available_times AS (
-                SELECT dt.nome, dt.time,
-                    ROW_NUMBER() OVER(PARTITION BY dt.nome ORDER BY dt.time) AS rn
-                FROM doctor_times dt
-                LEFT JOIN consulta c ON dt.nome = c.nome AND dt.time = c.hora AND c.data = %s
-                WHERE c.nome IS NULL
-            )
-            SELECT nome, time
-            FROM numbered_available_times
-            WHERE rn <= 3
-            ORDER BY nome, time;
-        ''', (clinic, specialty, date, date))
+@app.route('/c/<clinic>/<specialization>/', methods=("GET",))
+def list_doctors(clinic, specialization):
 
-        # Add the available slots to the result
-        for nome, time in cursor.fetchall():
-            if len(result[nome]) < 3:
-                result[nome].append((date, time))
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					# Get the list of doctors
+					cur.execute('''
+						SELECT m.nome
+						FROM medico m
+						JOIN trabalha t ON m.nif = t.nif
+						WHERE t.nome = %s AND m.especialidade = %s
+					''', (clinic, specialization))
+					doctors = [row[0] for row in cur.fetchall()]
 
-        # Go to the next day
-        date += datetime.timedelta(days=1)
+					# Initialize the result
+					result = {doctor: [] for doctor in doctors}
 
-    cursor.close()
-    conn.close()
+					# Start from today
+					date = datetime.date.today()
 
-    return jsonify(result)
+					# Loop until we have 3 slots for each doctor
+					while any(len(slots) < 3 for slots in result.values()):
+						cur.execute("""
+						WITH possible_times (time) AS (
+							VALUES ('08:00'::time), ('08:30'::time), ('09:00'::time), ('09:30'::time), 
+								('10:00'::time), ('10:30'::time), ('11:00'::time), ('11:30'::time), 
+								('12:00'::time), ('12:30'::time), ('14:00'::time), ('14:30'::time), 
+								('15:00'::time), ('15:30'::time), ('16:00'::time), ('16:30'::time), 
+								('17:00'::time), ('17:30'::time), ('18:00'::time), ('18:30'::time)
+						),  doctor_times AS (
+							SELECT m.nome, p.time
+							FROM medico m
+							JOIN trabalha t ON m.nif = t.nif
+							CROSS JOIN possible_times p
+							WHERE t.nome = %s AND m.especialidade = %s AND t.dia_da_semana = EXTRACT(ISODOW FROM %s::date)
+						), existing_appointments as (
+							Select m.nome, m.nif, c.data, c.hora
+							FROM consulta c, medico m
+							WHERE c.nif = m.nif AND c.data = %s AND m.especialidade = %s AND c.nome = %s
+						), free_slots AS (
+							SELECT dt.nome, dt.time,
+								ROW_NUMBER() OVER(PARTITION BY dt.nome ORDER BY dt.time) AS rn
+							FROM doctor_times dt
+							LEFT JOIN existing_appointments ea ON dt.nome = ea.nome AND dt.time = ea.hora
+							WHERE ea.nif IS NULL
+						)
+						SELECT nome, time
+						FROM free_slots
+						WHERE rn <= 3
+						ORDER BY nome, time;
+						""", (clinic, specialization, date, date, specialization, clinic))
 
-@app.route('/a/<clinic>/registar/', methods=['POST'])
-def register_consultation(clinic):
-    data = request.json
-    ssn = data['ssn']
-    nif = data['nif']
-    data_consulta = data['data']
-    hora_consulta = data['hora']
-    codigo_sns = data.get('codigo_sns', None)
+						# Add the available slots to the result
+						for nome, time in cur.fetchall():
+							if len(result[nome]) < 3:
+								result[nome].append((str(date), str(time)))
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO consulta (ssn, nif, nome, data, hora, codigo_sns)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        RETURNING id;
-    ''', (ssn, nif, clinic, data_consulta, hora_consulta, codigo_sns))
-    consulta_id = cursor.fetchone()[0]
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return jsonify({'consulta_id': consulta_id})
+						# Go to the next day
+						date += datetime.timedelta(days=1)
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			else:
+				log.debug(f"Mostrando os 3 próximos horários disponíveis para os médicos da especialidade {specialization} na clínica {clinic}.")
+				return jsonify(result)
 
-@app.route('/a/<clinic>/cancelar/', methods=['POST'])
+@app.route("/a/<clinic>/registar/", methods=("POST",))
+def create_consultation(clinic):
+	patient_ssn = request.args.get("paciente")
+	doctor_nif = request.args.get("medico")
+	date = request.args.get("data")
+	time = request.args.get("hora")
+
+	if not patient_ssn:
+		return jsonify({"message": "SSN do paciente é obrigatório.", "status": "error"}), 400
+	if not doctor_nif:
+		return jsonify({"message": "NIF do médico é obrigatório.", "status": "error"}), 400
+	if not date:
+		return jsonify({"message": "Data é obrigatória.", "status": "error"}), 400
+	if not time:
+		return jsonify({"message": "Hora é obrigatória.", "status": "error"}), 400
+	
+	if not is_decimal(patient_ssn):
+		return jsonify({"message": "SSN do paciente deve ser um número.", "status": "error"}), 400
+	if not is_decimal(doctor_nif):
+		return jsonify({"message": "NIF do médico deve ser um número.", "status": "error"}), 400
+	if not is_date(date):
+		return jsonify({"message": "Data deve estar no formato YYYY-MM-DD.", "status": "error"}), 400
+	if not is_time(time):
+		return jsonify({"message": "Hora deve estar no formato HH:MM.", "status": "error"}), 400
+
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					# Fetch the highest value of codigo_sns
+					cur.execute("""
+						SELECT codigo_sns FROM consulta ORDER BY codigo_sns DESC LIMIT 1
+					""")
+					last_codigo_sns = cur.fetchone()
+				
+					# Increment the codigo_sns
+					next_codigo_sns = str(int(last_codigo_sns[0]) + 1)
+					
+					# Ensure the codigo_sns has 12 digits by adding leading zeros if necessary
+					next_codigo_sns = next_codigo_sns.zfill(12)
+				
+					# Insert the new consultation with the incremented codigo_sns
+					cur.execute("""
+						INSERT INTO consulta (ssn, nif, nome, data, hora, codigo_sns)
+						VALUES (%s, %s, %s, %s, %s, %s)
+					""", (patient_ssn, doctor_nif, clinic, date, time, next_codigo_sns))
+				
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			else:
+				log.debug(f"Consulta marcada para {date} às {time} com o médico {doctor_nif} para o paciente {patient_ssn}")
+				return "", 201
+
+@app.route("/a/<clinic>/cancelar/", methods=("POST",))
 def cancel_consultation(clinic):
-    data = request.json
-    ssn = data['ssn']
-    data_consulta = data['data']
-    hora_consulta = data['hora']
+	patient_ssn = request.args.get("paciente")
+	doctor_nif = request.args.get("medico")
+	date = request.args.get("data")
+	time = request.args.get("hora")
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        DELETE FROM consulta
-        WHERE ssn = %s AND nome = %s AND data = %s AND hora = %s
-        RETURNING id;
-    ''', (ssn, clinic, data_consulta, hora_consulta))
-    consulta_id = cursor.fetchone()
-    conn.commit()
-    cursor.close()
-    conn.close()
+	if not patient_ssn:
+		return jsonify({"message": "SSN do paciente é obrigatório.", "status": "error"}), 400
+	if not doctor_nif:
+		return jsonify({"message": "NIF do médico é obrigatório.", "status": "error"}), 400
+	if not date:
+		return jsonify({"message": "Data é obrigatória.", "status": "error"}), 400
+	if not time:
+		return jsonify({"message": "Hora é obrigatória.", "status": "error"}), 400
+	
+	if not is_decimal(patient_ssn):
+		return jsonify({"message": "SSN do paciente deve ser um número.", "status": "error"}), 400
+	if not is_decimal(doctor_nif):
+		return jsonify({"message": "NIF do médico deve ser um número.", "status": "error"}), 400
+	if not is_date(date):
+		return jsonify({"message": "Data deve estar no formato YYYY-MM-DD.", "status": "error"}), 400
+	if not is_time(time):
+		return jsonify({"message": "Hora deve estar no formato HH:MM.", "status": "error"}), 400
 
-    if consulta_id:
-        return jsonify({'consulta_id': consulta_id[0]})
-    else:
-        return jsonify({'error': 'Consulta not found or cannot be canceled.'}), 404
+	 # Delete the consultation
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						DELETE FROM consulta
+						WHERE ssn = %s AND nif = %s AND nome = %s AND data = %s AND hora = %s
+					""", (patient_ssn, doctor_nif, clinic, date, time))
+				
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			else:
+				log.debug(f"Consulta cancelada para {date} às {time} com o médico {doctor_nif} para o paciente {patient_ssn}")
+				return "", 204
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+@app.route("/ping", methods=("GET",))
+def ping():
+	log.debug("ping!")
+	return jsonify({"message": "pong!", "status": "success"})
+
+
+if __name__ == "__main__":
+	app.run(port=5001)
