@@ -75,22 +75,22 @@ PRIMARY KEY (id, parametro)
 ALTER TABLE consulta
 ADD CONSTRAINT check_consulta_hora
 CHECK (
-    (EXTRACT(HOUR FROM hora) BETWEEN 8 AND 12 OR EXTRACT(HOUR FROM hora) BETWEEN 14 AND 18)
-    AND (EXTRACT(MINUTE FROM hora) IN (0, 30))
+	(EXTRACT(HOUR FROM hora) BETWEEN 8 AND 12 OR EXTRACT(HOUR FROM hora) BETWEEN 14 AND 18)
+	AND (EXTRACT(MINUTE FROM hora) IN (0, 30))
 );
 
 -- (RI-2)
 CREATE OR REPLACE FUNCTION check_doctor_patient() 
 RETURNS TRIGGER AS $$
 BEGIN
-    IF EXISTS (
-        SELECT 1 
-        FROM paciente p 
-        WHERE p.ssn = NEW.ssn AND p.nif = NEW.nif
-    ) THEN
-        RAISE EXCEPTION 'A doctor cannot consult himself.';
-    END IF;
-    RETURN NEW;
+	IF EXISTS (
+		SELECT 1 
+		FROM paciente p 
+		WHERE p.ssn = NEW.ssn AND p.nif = NEW.nif
+	) THEN
+		RAISE EXCEPTION 'A doctor cannot consult himself.';
+	END IF;
+	RETURN NEW;
 END;
 
 $$ LANGUAGE plpgsql;
@@ -104,21 +104,19 @@ EXECUTE FUNCTION check_doctor_patient();
 CREATE OR REPLACE FUNCTION check_clinic_workday()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM trabalha t
-        WHERE t.nif = NEW.nif
-          AND t.nome = NEW.nome
-          AND t.dia_da_semana = EXTRACT(ISODOW FROM NEW.data)
-    ) THEN
-        RAISE EXCEPTION 'A doctor can only give consultations in the clinic where he works on that weekday.';
-    END IF;
-    RETURN NEW;
+	IF NOT EXISTS (
+		SELECT 1
+		FROM trabalha t
+		WHERE t.nif = NEW.nif
+		  AND t.nome = NEW.nome
+		  AND t.dia_da_semana = EXTRACT(ISODOW FROM NEW.data)
+	) THEN
+		RAISE EXCEPTION 'A doctor with NIF % and name % can only give consultations in the clinic where they work on %s.', NEW.nif, NEW.nome, weekday_name;
+	END IF;
+	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE TRIGGER trg_check_clinic_workday
 BEFORE INSERT ON consulta
 FOR EACH ROW
 EXECUTE FUNCTION check_clinic_workday();
-
