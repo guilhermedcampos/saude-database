@@ -92,10 +92,24 @@ def get_clinics():
 @app.route("/c/<clinic>/", methods=("GET",))
 def get_specializations(clinic):
 
+	# Check if the clinic exists
 	with pool.connection() as conn:
 		with conn.cursor() as cur:
 			try:
 				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM clinica WHERE nome = %s
+					""", (clinic,))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Clínica não encontrada.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					# Get the list of specializations
 					cur.execute("""
 						SELECT DISTINCT m.especialidade
 						FROM medico m
@@ -113,6 +127,32 @@ def get_specializations(clinic):
 
 @app.route('/c/<clinic>/<specialization>/', methods=("GET",))
 def list_doctors(clinic, specialization):
+
+	# Check if the clinic exists
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM clinica WHERE nome = %s
+					""", (clinic,))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Clínica não encontrada.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+	
+	# Check if the specialization exists
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM medico WHERE especialidade = %s
+					""", (specialization,))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Especialidade não encontrada.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
 
 	with pool.connection() as conn:
 		with conn.cursor() as cur:
@@ -180,11 +220,14 @@ def list_doctors(clinic, specialization):
 
 @app.route("/a/<clinic>/registar/", methods=("POST",))
 def create_consultation(clinic):
+
+	# Get the parameters from the request
 	patient_ssn = request.args.get("paciente")
 	doctor_nif = request.args.get("medico")
 	date = request.args.get("data")
 	time = request.args.get("hora")
 
+	# Check if the parameters are present
 	if not patient_ssn:
 		return jsonify({"message": "SSN do paciente é obrigatório.", "status": "error"}), 400
 	if not doctor_nif:
@@ -194,6 +237,7 @@ def create_consultation(clinic):
 	if not time:
 		return jsonify({"message": "Hora é obrigatória.", "status": "error"}), 400
 	
+	# Check if the parameters are in the correct format
 	if not is_decimal(patient_ssn):
 		return jsonify({"message": "SSN do paciente deve ser um número.", "status": "error"}), 400
 	if not is_decimal(doctor_nif):
@@ -203,6 +247,47 @@ def create_consultation(clinic):
 	if not is_time(time):
 		return jsonify({"message": "Hora deve estar no formato HH:MM.", "status": "error"}), 400
 
+	# Check if the clinic exists
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM clinica WHERE nome = %s
+					""", (clinic,))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Clínica não encontrada.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			
+	# Check if the patient exists
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM paciente WHERE ssn = %s
+					""", (patient_ssn,))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Paciente não encontrado.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+
+
+	# Check if the doctor exists
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM medico WHERE nif = %s
+					""", (doctor_nif,))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Médico não encontrado.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			
+	# Insert the consultation
 	with pool.connection() as conn:
 		with conn.cursor() as cur:
 			try:
@@ -229,15 +314,18 @@ def create_consultation(clinic):
 				return jsonify({"message": str(e), "status": "error"}), 500
 			else:
 				log.debug(f"Consulta marcada para {date} às {time} com o médico {doctor_nif} para o paciente {patient_ssn}")
-				return "", 201
+				return jsonify({"consulta marcada": f"{date} às {time} com o médico {doctor_nif} para o paciente {patient_ssn}", "status": "success"}), 201
 
 @app.route("/a/<clinic>/cancelar/", methods=("POST",))
 def cancel_consultation(clinic):
+
+	# Get the parameters from the request
 	patient_ssn = request.args.get("paciente")
 	doctor_nif = request.args.get("medico")
 	date = request.args.get("data")
 	time = request.args.get("hora")
 
+	# Check if the parameters are present
 	if not patient_ssn:
 		return jsonify({"message": "SSN do paciente é obrigatório.", "status": "error"}), 400
 	if not doctor_nif:
@@ -247,6 +335,7 @@ def cancel_consultation(clinic):
 	if not time:
 		return jsonify({"message": "Hora é obrigatória.", "status": "error"}), 400
 	
+	# Check if the parameters are in the correct format
 	if not is_decimal(patient_ssn):
 		return jsonify({"message": "SSN do paciente deve ser um número.", "status": "error"}), 400
 	if not is_decimal(doctor_nif):
@@ -256,7 +345,46 @@ def cancel_consultation(clinic):
 	if not is_time(time):
 		return jsonify({"message": "Hora deve estar no formato HH:MM.", "status": "error"}), 400
 
-	 # Delete the consultation
+	# Check if the clinic exists
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM clinica WHERE nome = %s
+					""", (clinic,))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Clínica não encontrada.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			
+	# Check if the patient exists
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM paciente WHERE ssn = %s
+					""", (patient_ssn,))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Paciente não encontrado.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			
+	# Check if the doctor exists
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM medico WHERE nif = %s
+					""", (doctor_nif,))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Médico não encontrado.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			
+	# Delete the consultation
 	with pool.connection() as conn:
 		with conn.cursor() as cur:
 			try:
@@ -270,13 +398,12 @@ def cancel_consultation(clinic):
 				return jsonify({"message": str(e), "status": "error"}), 500
 			else:
 				log.debug(f"Consulta cancelada para {date} às {time} com o médico {doctor_nif} para o paciente {patient_ssn}")
-				return "", 204
+				return jsonify({"consulta cancelada": f"{date} às {time} com o médico {doctor_nif} para o paciente {patient_ssn}", "status": "success"}), 201
 
 @app.route("/ping", methods=("GET",))
 def ping():
 	log.debug("ping!")
 	return jsonify({"message": "pong!", "status": "success"})
-
 
 if __name__ == "__main__":
 	app.run(port=5001)
