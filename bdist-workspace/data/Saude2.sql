@@ -80,14 +80,14 @@ CHECK (
 );
 
 -- (RI-2)
-CREATE OR REPLACE FUNCTION check_doctor_patient_constraint(doctor_nif INT, patient_ssn INT)
+CREATE OR REPLACE FUNCTION check_doctor_patient_constraint(nif CHAR(9), ssn CHAR(11))
 RETURNS BOOLEAN AS $$
 BEGIN
     -- Check if the doctor is trying to consult themselves
     IF EXISTS (
         SELECT 1 
         FROM paciente p 
-        WHERE p.ssn = patient_ssn AND p.nif = doctor_nif
+        WHERE p.ssn = ssn AND p.nif = nif
     ) THEN
         RETURN FALSE;
     ELSE
@@ -98,7 +98,7 @@ $$ LANGUAGE plpgsql;
 
 ALTER TABLE consulta
 ADD CONSTRAINT chk_doctor_patient
-CHECK (check_doctor_patient_constraint(doctor_nif, patient_ssn));
+CHECK (check_doctor_patient_constraint(nif, ssn));
 
 
 -- (RI-3)
