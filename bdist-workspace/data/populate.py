@@ -75,11 +75,14 @@ def get_clinic(NIF: int, date: date):
 			return work_order[1]
 	return None
 
-# 87720 Appointments
 appointments = []
 sns_code = 1
 start_date = date(2023, 1, 1)
-end_date = date(2024, 12, 31)
+# Get the current date
+current_date = date.today()
+# Define the end date
+end_date = date(current_date.year, current_date.month, current_date.day)
+# Generate appointments until current date 
 delta = timedelta(days=1)
 current_date = start_date
 while current_date <= end_date:
@@ -96,11 +99,15 @@ while current_date <= end_date:
 	current_date += delta
 print("Appointments generated.")
 
-# 70176 Appointments with Perscriptions
+
 medications = ["Paracetamol", "Ibuprofeno", "Aspirina", "Benadril", "Ritalina", "Prozac"]
 perscriptions = []
 
-for i in range(70176):
+# Get number of appointments
+num_appointments = len(appointments)
+# Calculate 80% of appointments
+eighty_percent = int(num_appointments * 0.8)
+for i in range(eighty_percent):
 	appointment_sns_code = appointments[i][5]
 	number_of_medications = random.randint(1, 6)
 	for medication in random.sample(medications, number_of_medications):
@@ -111,7 +118,7 @@ print("Perscriptions generated.")
 # Symptoms
 symptoms = [f"Symptom {i}" for i in range(1, 51)]
 metrics = ["pressão diastólica"] + [f"Metric {i}" for i in range(1, 20)]
-# 87720 Appointments with Observations
+
 observations = []
 for i, appointment in enumerate(appointments):
 	num_symptoms = random.randint(1, 5)
@@ -186,13 +193,13 @@ with open("populate.sql", "w", encoding="utf-8") as file:
 		ssn, nif, clinic, day, hour, sns_code = appointment
 		sns_code_str = str(sns_code).zfill(12)
 		sql = f"	('{ssn}', '{nif}', '{clinic}', '{day}', '{hour}', '{sns_code_str}')"
-		sql += "," if i < 87719 else ";"
+		sql += "," if i < len(appointments) - 1 else ";"
 		sql += "\n"
 		file.write(sql)
 	file.write("\n")
 	print("Appointments inserted.")
 
-	# Write Percriptions for 70176 Appointments
+	# Write Percriptions 
 	file.write("INSERT INTO receita (codigo_sns, medicamento, quantidade) VALUES\n")
 	for i, perscription in enumerate(perscriptions):
 		appointment_sns_code, medication, quantity = perscription
