@@ -131,7 +131,9 @@ def get_specializations(clinic):
 
 @app.route('/c/<clinic>/<specialization>/', methods=("GET",))
 def list_doctors(clinic, specialization):
-	"""Show all the doctors for a clinic and specialization."""
+	"""Show all the doctors for a clinic and specialization.
+		Aditionally, show the 3 next available slots for each doctor.
+	"""
 
 	# Check if the clinic exists
 	with pool.connection() as conn:
