@@ -75,51 +75,51 @@ PRIMARY KEY (id, parametro)
 ALTER TABLE consulta
 ADD CONSTRAINT check_consulta_hora
 CHECK (
-	(EXTRACT(HOUR FROM hora) BETWEEN 8 AND 12 OR EXTRACT(HOUR FROM hora) BETWEEN 14 AND 18)
-	AND (EXTRACT(MINUTE FROM hora) IN (0, 30))
+    (EXTRACT(HOUR FROM hora) BETWEEN 8 AND 12 OR EXTRACT(HOUR FROM hora) BETWEEN 14 AND 18)
+    AND (EXTRACT(MINUTE FROM hora) IN (0, 30))
 );
 
 -- (RI-2)
-CREATE OR REPLACE FUNCTION check_doctor_patient_constraint(nif CHAR(9), ssn CHAR(11))
-RETURNS BOOLEAN AS $$
+CREATE OR REPLACE FUNCTION check_doctor_patient() 
+RETURNS TRIGGER AS $$
 BEGIN
-    -- Check if the doctor is trying to consult themselves
     IF EXISTS (
         SELECT 1 
         FROM paciente p 
-        WHERE p.ssn = ssn AND p.nif = nif
+        WHERE p.ssn = NEW.ssn AND p.nif = NEW.nif
     ) THEN
-        RETURN FALSE;
-    ELSE
-        RETURN TRUE;
+        RAISE EXCEPTION 'A doctor cannot consult himself.';
     END IF;
+    RETURN NEW;
 END;
+
 $$ LANGUAGE plpgsql;
 
-ALTER TABLE consulta
-ADD CONSTRAINT chk_doctor_patient
-CHECK (check_doctor_patient_constraint(nif, ssn));
-
+CREATE TRIGGER trg_check_doctor_patient
+BEFORE INSERT ON consulta
+FOR EACH ROW
+EXECUTE FUNCTION check_doctor_patient();
 
 -- (RI-3)
-CREATE OR REPLACE FUNCTION check_clinic_workday_constraint(doctor_nif CHAR(9), clinic_name VARCHAR(80), consultation_date DATE)
-RETURNS BOOLEAN AS $$
+CREATE OR REPLACE FUNCTION check_clinic_workday()
+RETURNS TRIGGER AS $$
+DECLARE
+    weekday_name TEXT;
 BEGIN
-    -- Check if the doctor works at the clinic on the given day of the week
-    IF EXISTS (
+    SELECT to_char(NEW.data, 'Day') INTO weekday_name;  -- Get the day of the week name
+    IF NOT EXISTS (
         SELECT 1
         FROM trabalha t
-        WHERE t.nif = doctor_nif
-          AND t.nome = clinic_name
-          AND t.dia_da_semana = EXTRACT(ISODOW FROM consultation_date)
+        WHERE t.nif = NEW.nif
+          AND t.nome = NEW.nome
+          AND t.dia_da_semana = EXTRACT(ISODOW FROM NEW.data)
     ) THEN
-        RETURN TRUE;
-    ELSE
-        RETURN FALSE;
+        RAISE EXCEPTION 'A doctor with NIF % and name % can only give consultations in the clinic where they work on %s.', NEW.nif, NEW.nome, weekday_name;
     END IF;
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
-ALTER TABLE consulta
-ADD CONSTRAINT chk_clinic_workday
-CHECK (check_clinic_workday_constraint(nif, nome, data));
+CREATE TRIGGER trg_check_clinic_workday
+BEFORE INSERT ON consulta
+FOR EACH ROW
+EXECUTE FUNCTION check_clinic_workday();

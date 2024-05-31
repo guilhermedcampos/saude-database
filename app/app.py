@@ -317,7 +317,18 @@ def create_consultation(clinic):
 					""", (patient_ssn, doctor_nif, clinic, date, time, next_codigo_sns))
 				
 			except Exception as e:
-				return jsonify({"message": str(e), "status": "error"}), 500
+				error_message = str(e)
+				if "violates check constraint" in error_message:
+					if "chk_clinic_workday" in error_message:
+						return jsonify({"message": "O médico não trabalha nessa clínica nesse dia da semana.", "status": "error"}), 400
+					elif "chk_doctor_patient" in error_message:
+						return jsonify({"message": "O médico não pode marcar uma consulta a si mesmo.", "status": "error"}), 400
+					elif "chk_appointment_hour" in error_message:
+						return jsonify({"message": "Não é possível marcar consultas a essa hora: Os horários das consultas são à hora exata ou meia-hora no horário 8-13h e 14-19h.", "status": "error"}), 400
+				elif "duplicate key value violates unique constraint" in error_message:
+					return jsonify({"message": "Já existe uma consulta marcada para essa data e hora.", "status": "error"}), 400
+				else:
+					return jsonify({"message": "Erro ao marcar consulta.", "status": "error"}), 500
 			else:
 				log.debug(f"Consulta marcada para {date} às {time} com o médico {doctor_nif} para o paciente {patient_ssn}")
 				return jsonify({"consulta marcada": f"{date} às {time} com o médico {doctor_nif} para o paciente {patient_ssn}", "status": "success"}), 201
@@ -388,6 +399,19 @@ def cancel_consultation(clinic):
 					""", (doctor_nif,))
 					if cur.fetchone()[0] == 0:
 						return jsonify({"message": "Médico não encontrado.", "status": "error"}), 404
+			except Exception as e:
+				return jsonify({"message": str(e), "status": "error"}), 500
+			
+	# Check if the consultation exists
+	with pool.connection() as conn:
+		with conn.cursor() as cur:
+			try:
+				with conn.transaction():
+					cur.execute("""
+						SELECT COUNT(*) FROM consulta WHERE ssn = %s AND nif = %s AND nome = %s AND data = %s AND hora = %s
+					""", (patient_ssn, doctor_nif, clinic, date, time))
+					if cur.fetchone()[0] == 0:
+						return jsonify({"message": "Consulta não encontrada.", "status": "error"}), 404
 			except Exception as e:
 				return jsonify({"message": str(e), "status": "error"}), 500
 			
