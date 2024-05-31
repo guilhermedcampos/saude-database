@@ -9,6 +9,9 @@ from psycopg.rows import namedtuple_row
 from psycopg_pool import ConnectionPool
 import datetime
 
+# Set timezone to Lisbon
+os.environ["TZ"] = "Europe/Lisbon"
+
 # Use the DATABASE_URL environment variable if it exists, otherwise use the default.
 # Use the format postgres://username:password@hostname/database_name to connect to the database.
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgres://saude:saude@postgres/saude")
@@ -57,6 +60,17 @@ def is_decimal(value):
 		return True
 	except ValueError:
 		return False
+	
+def is_hour_before(hour1, hour2):
+    hour1 = hour1.split(":")
+    hour2 = hour2.split(":")[0:2]  # Only take the hours and minutes
+
+    if int(hour1[0]) < int(hour2[0]):
+        return True
+    elif int(hour1[0]) == int(hour2[0]) and int(hour1[1]) < int(hour2[1]):
+        return True
+    else:
+        return False
 	
 # Check if a string is a date
 def is_date(value):
@@ -294,7 +308,14 @@ def create_consultation(clinic):
 						return jsonify({"message": "Médico não encontrado.", "status": "error"}), 404
 			except Exception as e:
 				return jsonify({"message": str(e), "status": "error"}), 500
-			
+	
+	cur_time = str(datetime.datetime.now().time())
+	# Check if date is in the future or today in a future time
+	if date < str(datetime.date.today()):
+		return jsonify({"message": "Não é possível marcar consultas em datas passadas.", "status": "error"}), 400
+	elif date == str(datetime.date.today()) and is_hour_before(time, cur_time):
+		return jsonify({"message": f"Não é possível marcar consultas em horas passadas.", "status": "error"}), 400
+
 	# Insert the consultation
 	with pool.connection() as conn:
 		with conn.cursor() as cur:
@@ -403,7 +424,14 @@ def cancel_consultation(clinic):
 						return jsonify({"message": "Médico não encontrado.", "status": "error"}), 404
 			except Exception as e:
 				return jsonify({"message": str(e), "status": "error"}), 500
-			
+	
+	cur_time = str(datetime.datetime.now().time())
+	# Check if the consultation is in the future
+	if date < str(datetime.date.today()):
+		return jsonify({"message": "Não é possível cancelar consultas em datas passadas.", "status": "error"}), 400
+	elif date == str(datetime.date.today()) and is_hour_before(time, cur_time):
+		return jsonify({"message": f"Não é possível cancelar consultas em horas passadas.", "status": "error"}), 400
+	
 	# Check if the consultation exists
 	with pool.connection() as conn:
 		with conn.cursor() as cur:
@@ -416,7 +444,7 @@ def cancel_consultation(clinic):
 						return jsonify({"message": "Consulta não encontrada.", "status": "error"}), 404
 			except Exception as e:
 				return jsonify({"message": str(e), "status": "error"}), 500
-			
+		
 	# Delete the consultation
 	with pool.connection() as conn:
 		with conn.cursor() as cur:
