@@ -50,6 +50,7 @@ app = Flask(__name__)
 app.config.from_prefixed_env()
 log = app.logger
 
+# Check if a string is a decimal
 def is_decimal(value):
 	try:
 		float(value)
@@ -57,6 +58,7 @@ def is_decimal(value):
 	except ValueError:
 		return False
 	
+# Check if a string is a date
 def is_date(value):
 	try:
 		datetime.datetime.strptime(value, '%Y-%m-%d')
@@ -64,6 +66,7 @@ def is_date(value):
 	except ValueError:
 		return False
 	
+# Check if a string is a time
 def is_time(value):
 	try:
 		datetime.datetime.strptime(value, '%H:%M')
@@ -91,6 +94,7 @@ def get_clinics():
 
 @app.route("/c/<clinic>/", methods=("GET",))
 def get_specializations(clinic):
+	"""Show all the specializations for a clinic."""
 
 	# Check if the clinic exists
 	with pool.connection() as conn:
@@ -104,12 +108,12 @@ def get_specializations(clinic):
 						return jsonify({"message": "Clínica não encontrada.", "status": "error"}), 404
 			except Exception as e:
 				return jsonify({"message": str(e), "status": "error"}), 500
-
+	
+	# Get the list of specializations	
 	with pool.connection() as conn:
 		with conn.cursor() as cur:
 			try:
 				with conn.transaction():
-					# Get the list of specializations
 					cur.execute("""
 						SELECT DISTINCT m.especialidade
 						FROM medico m
@@ -127,6 +131,7 @@ def get_specializations(clinic):
 
 @app.route('/c/<clinic>/<specialization>/', methods=("GET",))
 def list_doctors(clinic, specialization):
+	"""Show all the doctors for a clinic and specialization."""
 
 	# Check if the clinic exists
 	with pool.connection() as conn:
@@ -154,11 +159,11 @@ def list_doctors(clinic, specialization):
 			except Exception as e:
 				return jsonify({"message": str(e), "status": "error"}), 500
 
+	# Get the list of doctors
 	with pool.connection() as conn:
 		with conn.cursor() as cur:
 			try:
 				with conn.transaction():
-					# Get the list of doctors
 					cur.execute('''
 						SELECT m.nome
 						FROM medico m
@@ -220,6 +225,7 @@ def list_doctors(clinic, specialization):
 
 @app.route("/a/<clinic>/registar/", methods=("POST",))
 def create_consultation(clinic):
+	"""Create a new consultation."""
 
 	# Get the parameters from the request
 	patient_ssn = request.args.get("paciente")
@@ -318,6 +324,7 @@ def create_consultation(clinic):
 
 @app.route("/a/<clinic>/cancelar/", methods=("POST",))
 def cancel_consultation(clinic):
+	"""Cancel a consultation."""
 
 	# Get the parameters from the request
 	patient_ssn = request.args.get("paciente")
