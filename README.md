@@ -21,7 +21,8 @@ Make sure you have the following installed:
 
    - PostgreSQL Database: Utilizes PostgreSQL for reliable and efficient data management.
   
-  Materialized Views: Enhances query performance by storing the result of a query physically.
+   - Materialized Views: Enhances query performance by storing the result of a query physically.
+   
   Integrity Constraints: Ensures data consistency and reliability with various constraints.
   Flask API: Provides a RESTful API for interacting with the database.
   Docker: Simplifies the setup and deployment process using Docker.
