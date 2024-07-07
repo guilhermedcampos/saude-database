@@ -133,14 +133,15 @@ Finally, send requests and view responses. You can verify the functionality of y
 ### Endpoints Supported 
 
 The python app supports the following api requests. To add more simply edit the app.py code to include more features.
-Get Clinics
+
+1. Get Clinics
 
     Endpoint: /
     Method: GET
     Description: Retrieves all clinics.
     Response:
 
-    json
+    ```json
 
     [
       {
@@ -148,30 +149,32 @@ Get Clinics
         "morada": "Clinic Address"
       }
     ]
+    ```
 
-Get Specializations
+2. Get Specializations
 
     Endpoint: /c/<clinic>/
     Method: GET
     Description: Retrieves all specializations for a specific clinic.
     Response:
 
-    json
+    ```json
 
     [
       {
         "especialidade": "Specialization"
       }
     ]
+    ```
 
-List Doctors
+3. List Doctors
 
     Endpoint: /c/<clinic>/<specialization>/
     Method: GET
     Description: Lists all doctors for a specific clinic and specialization.
     Response:
 
-    json
+    ```json
 
     {
       "Doctor Name": [
@@ -180,8 +183,9 @@ List Doctors
         ("2024-06-01", "09:00")
       ]
     }
+    ```
 
-Create Consultation
+4. Create Consultation
 
     Endpoint: /a/<clinic>/registar/
     Method: POST
@@ -194,14 +198,15 @@ Create Consultation
         )
     Response:
 
-    json
+    ```json
 
     {
       "consulta marcada": "2024-05-30 às 08:00 com o médico 123456789 para o paciente 987654321",
       "status": "success"
     }
+    ```
 
-Cancel Consultation
+5. Cancel Consultation
 
     Endpoint: /a/<clinic>/cancelar/
     Method: POST
@@ -214,29 +219,13 @@ Cancel Consultation
         )
     Response:
 
-    json
+    ```json
 
     {
       "consulta cancelada": "2024-05-30 às 08:00 com o médico 123456789 para o paciente 987654321",
       "status": "success"
     }
-
-Ping
-
-    Endpoint: /ping
-    Method: GET
-    Description: Simple endpoint to check if the server is running.
-    Response:
-
-    json
-
-    {
-      "message": "pong!",
-      "status": "success"
-    }
-
-
-    Automate Tests: BRUNO allows you to create automated tests by setting up test scripts in the Tests tab. You can write JavaScript code to validate the response data and status codes.
+    ```
 
 BRUNO provides a user-friendly interface for testing and debugging your API, making it easier to ensure your endpoints are working as expected
 
