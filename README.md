@@ -41,7 +41,9 @@ Install the required packages:
 pip install -r requirements.txt
 ```
 
-### Starting the Workspace
+## Starting the Workspace
+
+### Running Docker
 
 To open the Jupyter Notebook workspace via Docker Compose, first, navigate to the /bdist-workspace directory in your terminal:
 
@@ -57,50 +59,80 @@ docker compose up
 
 The Jupyter Notebook service runs on port 9999 and requires authentication via a token. After starting the service, locate your authentication token in the terminal logs. Look for the section towards the end of the logs that provides a URL with your token, such as http://127.0.0.1:9999/lab?token=YOUR_AUTHENTICATION_TOKEN. Copy and paste this URL into your browser to access the Jupyter Notebook workspace. If needed, you can also view these logs in the Containers tab within the Docker Desktop application.
 
+### Connecting and Populating the Database
 
-Set up the PostgreSQL database using the provided schema:
+Set up the PostgreSQL database with the following commands in the Jupiter Network command line:
 
-sql
+```psql
+-- Connecting to postgres (must have a postgres user already)
+psql -h postgres -U postgres
+```
 
-    -- Example: Execute this in your PostgreSQL client
-    CREATE DATABASE saude;
-    \c saude
-    \i schema.sql
+```sql
+CREATE USER saude WITH PASSWORD 'saude';
+CREATE DATABASE saude WITH OWNER = bank ENCODING = 'UTF8';
+GRANT ALL ON DATABASE bank TO bank;
 
-Configuration
+---Now let's populate the database and add it's constraints, tables, triggers and procedures:
 
-Set the DATABASE_URL environment variable to point to your PostgreSQL instance. For example:
+\i data/Saude.sql
+\i data/populate.sql
+```
 
-bash
+Now that the database is populated, all SQL queries can be performed on existing data. Alternatively, the folder data also comes with a materialized view "Vista.sql" with the all the appointments and information on them. To run that view do:
 
-export DATABASE_URL="postgres://username:password@hostname/saude"
+```sql
+\i data/Vista.sql
+```
 
-Docker Setup
+## App Setup
 
-    Ensure Docker is installed on your system. If not, download and install Docker from the official website.
+### Running Docker
 
-    Start the PostgreSQL database using Docker Compose:
+Run docker in a terminal once again but instead do the following command: 
 
-    bash
-
+```bash
 docker compose -f docker-compose.app.yml up
+```
 
 Once the Docker containers are running, you can connect to the PostgreSQL database using psql:
 
-bash
+```psql
+psql -h postgres -U postgres
+```
 
-    psql -h postgres -U postgres
-
-Usage
+### Running the App
 
 To start the Flask application, run:
 
-bash
-
-python app.py
+```bash
+python3 app/app.py
+```
 
 The app will be available at http://localhost:5001.
-API Endpoints
+
+
+## Testing with BRUNO
+
+You can test the SAUDE Management System API endpoints using BRUNO, aN API testing tool. 
+
+### Install BRUNO
+
+First, create a new collection. Open BRUNO and create a new collection for your SAUDE Management System API tests.
+
+Add Requests: For each API endpoint, add a new request in BRUNO with the appropriate method (GET or POST) and URL. For example:
+
+- For the Get Clinics endpoint, add a GET request to http://localhost:5001/.
+- For the Create Consultation endpoint, add a POST request to http://localhost:5001/a/<clinic>/registar/ with the required parameters.
+
+Thirdly, set request parameters. For endpoints that require parameters, such as Create Consultation, set the request parameters in the appropriate section in BRUNO. You can use the Query Params tab for query parameters and the Body tab for request body parameters.
+
+Finally, send requests and view responses. You can verify the functionality of your API by checking the status codes and response data.
+
+
+### Endpoints Supported 
+
+The python app supports the following api requests. To add more simply edit the app.py code to include more features.
 Get Clinics
 
     Endpoint: /
@@ -203,21 +235,6 @@ Ping
       "status": "success"
     }
 
-Testing with BRUNO
-
-You can test the SAUDE Management System API endpoints using BRUNO, a powerful API testing tool. Here's how:
-
-    Install BRUNO: Follow the instructions on the BRUNO website to install BRUNO.
-
-    Create a New Collection: Open BRUNO and create a new collection for your SAUDE Management System API tests.
-
-    Add Requests: For each API endpoint, add a new request in BRUNO with the appropriate method (GET or POST) and URL. For example:
-        For the Get Clinics endpoint, add a GET request to http://localhost:5001/.
-        For the Create Consultation endpoint, add a POST request to http://localhost:5001/a/<clinic>/registar/ with the required parameters.
-
-    Set Request Parameters: For endpoints that require parameters, such as Create Consultation, set the request parameters in the appropriate section in BRUNO. You can use the Query Params tab for query parameters and the Body tab for request body parameters.
-
-    Send Requests and View Responses: Send the requests and view the responses in BRUNO. You can verify the functionality of your API by checking the status codes and response data.
 
     Automate Tests: BRUNO allows you to create automated tests by setting up test scripts in the Tests tab. You can write JavaScript code to validate the response data and status codes.
 
